@@ -1,23 +1,57 @@
 from dronekit import connect, VehicleMode, LocationGlobalRelative, LocationGlobal
 import time
+import sys
 # Connect to the Vehicle (in this case a UDP endpoint)
 # Insert YOUR ip address in the next line when connected to the drone's network (Bridged Connection, replicate in VM)
-vehicle = connect('10.1.1.165:14550', wait_ready=True)
 
+# Vars
+MyIP = sys.argv[1] if len(sys.argv) >= 2 else 'udpin:0.0.0.0:14550'
+TargetHomeGPS = [39.303190, -84.477859, 223]    # GPS Coordinate, make sure (3rd value) is relatively high above ground
+
+TravelSpeed = 2   # integer, speed in m/s, Matt = [3, 5]
+LandingSpeed = 2    # integer, speed in m/s, Matt = 3
+
+# Connect
+vehicle = connect(MyIP, wait_ready=True)
 vehicle.mode = VehicleMode("GUIDED")
 vehicle.armed = True
-home_new = LocationGlobal(39.3038813,-84.4778206,223) # Make sure altitude is a decent amount above the ground
+
+# Get all vehicle attributes (state)
+print "Vehicle state:"
+print " Global Location: %s" % vehicle.location.global_frame
+print " Global Location (relative altitude): %s" % vehicle.location.global_relative_frame
+print " Local Location: %s" % vehicle.location.local_frame
+print " Attitude: %s" % vehicle.attitude
+print " Velocity: %s" % vehicle.velocity
+print " Battery: %s" % vehicle.battery
+print " Last Heartbeat: %s" % vehicle.last_heartbeat
+print " Heading: %s" % vehicle.heading
+print " Groundspeed: %s" % vehicle.groundspeed
+print " Airspeed: %s" % vehicle.airspeed
+print " Mode: %s" % vehicle.mode.name
+print " Is Armable?: %s" % vehicle.is_armable
+print " Armed: %s" % vehicle.armed
+
+# Set Locations
+print TargetHomeGPS
+home_hover = LocationGlobal(TargetHomeGPS[0], TargetHomeGPS[1], TargetHomeGPS[2])
+home_ground = LocationGlobal(TargetHomeGPS[0], TargetHomeGPS[1], TargetHomeGPS[2])
+home_ground.alt = TargetHomeGPS[2] - 15   # Make this a number that is slightly below the ground
 time.sleep(1)
-vehicle.airspeed = 2 # Adjust these two numbers (M/S) as you please, higher is faster. 3 is a definite safe, slow speed
-vehicle.groundspeed = 2
-vehicle.simple_goto(home_new)
-my_location = home_new
-print my_location
-my_location.alt = 210 # Make this a number that is slightly below the ground
-vehicle.home_location = my_location
-time.sleep(5) # Increases for longer travel distances
-vehicle.airspeed = 3 # Generally safe landing speed
-vehicle.groundspeed = 3
+
+# Change Home Location
+vehicle.home_location = home_ground
+time.sleep(1)
+
+# Travel over New Home
+vehicle.airspeed = TravelSpeed
+vehicle.groundspeed = TravelSpeed
+vehicle.simple_goto(home_hover)
+time.sleep(5)    # Increases for longer travel distances
+
+# Land
+vehicle.airspeed = LandingSpeed    # Generally safe landing speed
+vehicle.groundspeed = LandingSpeed
 vehicle.mode = VehicleMode("RTL") # Go to home
-time.sleep(14) # Do I need this sleep? Probably not. But why not? Probably some good reasons.
+time.sleep(14)  # Do I need this sleep? Probably not. But why not? Probably some good reasons.
 vehicle.close()
