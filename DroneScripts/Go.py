@@ -1,7 +1,6 @@
 #!/usr/bin/python
-from dronekit import connect, VehicleMode, LocationGlobalRelative, LocationGlobal
+from dronekit import connect, VehicleMode, LocationGlobal
 import time
-import sys
 import argparse
 
 parser = argparse.ArgumentParser(description='Take control of drone and land at given GPS coordinates')
@@ -20,13 +19,40 @@ def verbose(string):
         print string
 
 
+def delta(attribute):
+    a = attribute
+    time.sleep(1)
+    b = attribute
+    c = int(b - a)
+    return c
+
+
+def send_ned_velocity(velocity_x, velocity_y, velocity_z, duration):
+    """
+    Move vehicle in direction based on specified velocity vectors.
+    """
+    msg = vehicle.message_factory.set_position_target_local_ned_encode(
+        0,       # time_boot_ms (not used)
+        0, 0,    # target system, target component
+        mavutil.mavlink.MAV_FRAME_LOCAL_NED, # frame
+        0b0000111111000111, # type_mask (only speeds enabled)
+        0, 0, 0, # x, y, z positions (not used)
+        velocity_x, velocity_y, velocity_z, # x, y, z velocity in m/s
+        0, 0, 0, # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
+        0, 0)    # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink)
+
+
+    # send command to vehicle on 1 Hz cycle
+    for x in range(0,duration):
+        vehicle.send_mavlink(msg)
+        time.sleep(1)
+
+
 verbose(args.debug)
 verbose(args.gps)
 
 
 def MoveTo(latitude, longitude, altitude):
-    print "Hello World!?!"
-
     # # Vars
     # MyIP = 'udpin:0.0.0.0:14550'     # Only works when on the right network.
     # # TargetHomeGPS = [39.3031664, -84.4779333, 223]    # Hardcoded GPS Coordinate, this should be the input variable
@@ -84,46 +110,66 @@ def MoveTo(latitude, longitude, altitude):
     # vehicle.close()
 
     # Simple Version
-    MyIP = 'udpin:0.0.0.0:14550'     # Only works when on the right network.
+    MyIP = 'udpin:0.0.0.0:14550'
     vehicle = connect(MyIP, wait_ready=True)
     vehicle.mode = VehicleMode("GUIDED")
-    if args.debug:
-        vehicle.armed = False
-    else:
-        vehicle.armed = True
 
-    home_origin = vehicle.home_location
-    home_ground = LocationGlobal(latitude, longitude, altitude)
-    home_ground.alt = altitude - 10
-    time.sleep(1)
+    while str(vehicle.mode) == str(VehicleMode("GUIDED")):
+        if args.debug:
+            vehicle.armed = False
+        else:
+            vehicle.armed = True
 
-    i = 0
-    while str(home_origin) == str(vehicle.home_location):
-        i = i + 1
-        vehicle.home_location = home_ground
-        print "Updating home location Attempt #: " + str(i)
-        if i > 10:
-            print"Could not update new home location. Exiting"
-            vehicle.close()
+        home_origin = vehicle.home_location
+        home_ground = LocationGlobal(latitude, longitude, altitude)
+        home_ground.alt = altitude - 10
         time.sleep(1)
-    print "Successfully updated home location"
 
-    vehicle.airspeed = 2
-    vehicle.groundspeed = 2
-    print "Go home"
-    vehicle.mode = VehicleMode("RTL")  # Go to home
-    time.sleep(5)
-    vehicle.mode = VehicleMode("RTL")  # Go to home
-    time.sleep(5)
-    vehicle.mode = VehicleMode("RTL")  # Go to home
-    time.sleep(5)
-    vehicle.mode = VehicleMode("RTL")  # Go to home
-    time.sleep(5)
-    vehicle.mode = VehicleMode("RTL")  # Go to home
-    time.sleep(5)
-    vehicle.armed = False
-    vehicle.close()
+        i = 0
+        while str(home_origin) == str(vehicle.home_location):
+            i = i + 1
+            vehicle.home_location = home_ground
+            verbose("Updating home location Attempt #: " + str(i))
+            if i > 10:
+                verbose("Could not update new home location. Exiting")
+                vehicle.close()
+            time.sleep(1)
+        verbose("Successfully updated home location")
+
+        vehicle.airspeed = 2
+        vehicle.groundspeed = 2
+        verbose("Go home")
+
+        vehicle.mode = VehicleMode("RTL")
+
+        while True:
+            if delta(vehicle.altitude) > 0:
+                up = True
+                if level or down:
+                    send_ned_velocity(0,0,5,1)
+            elif delta(vehicle.altitude) < 0:
+                down = True
+                pass
+            else:
+                level = True
+                if down:
+                    print vehicle.capabilities.flight_termination
+                    vehicle.capabilities.flight_termination = True
+                    vehicle.armed = False
+
+            time.sleep(1)
+            if not vehicle.armed:
+                vehicle.close()
+                print "Vehicle Landed successfully"
+                exit()
+
+    while vehicle.mode != VehicleMode("GUIDED"):
+        verbose("Controller Override, attempting to reconnect...")
+        vehicle.close()
+        MoveTo(args.gps[0], args.gps[1], args.gps[2])
 
 
 # if not args.debug:
-    MoveTo(args.gps[0], args.gps[1], args.gps[2])
+
+
+MoveTo(args.gps[0], args.gps[1], args.gps[2])

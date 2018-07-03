@@ -1,14 +1,11 @@
 import os
-import subprocess
 import argparse
-import exceptions
 
-parser = argparse.ArgumentParser(description='retrieve MAC adress of targeted network adapter')
+parser = argparse.ArgumentParser(description='retrieve MAC address of targeted network adapter')
 parser.add_argument('--verbose','-v', action='store_true', required=False,
                     help='Enable Verbose mode')
 parser.add_argument('--adapter', '-a', required=True,
-                    help='Sets new coordinates for Drone to land at. Enter coordinates as 3 separate objects')
-
+                    help="This argument identifies the adapter whose MAC will be returned")
 args = parser.parse_args()
 
 
